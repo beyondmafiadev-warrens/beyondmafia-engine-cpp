@@ -177,7 +177,7 @@ namespace gameServer {
             if (buffer_.size() > 0 && buffer_.size() < MAX_IP_PACK_SIZE) {
                 memset(formatted_msg.data(), '\0', formatted_msg.size());
                 std::string data = beast::buffers_to_string(buffer_.data());
-                strcpy_s(formatted_msg.data(), formatted_msg.size(), data.c_str());
+                strcpy(formatted_msg.data(), data.c_str());
                 //parse message
                 //ensure message length is adequate 
                 //parse message prior to on message
@@ -430,7 +430,7 @@ namespace gameServer {
     void personInRoom::createWebsocket() {
         std::shared_ptr<boost::asio::io_context> io_service(new boost::asio::io_context);
         boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0);
-        std::shared_ptr<listener>listener (new listener(io_service, endpoint, shared_from_this()));
+        std::shared_ptr<listener>listener (new gameServer::listener(io_service, endpoint, shared_from_this()));
         listener.swap(listener_);
         listener_->run();
         t = std::make_shared<boost::thread>( boost::thread( boost::bind(&gameServer::socketThread::run, io_service) ));

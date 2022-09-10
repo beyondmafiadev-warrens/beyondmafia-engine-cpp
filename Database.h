@@ -1,5 +1,8 @@
 #pragma once
 #include <mysql/jdbc.h>
+#include <boost/json.hpp>
+
+
 namespace db {
 	class database {
 	public:
@@ -10,9 +13,9 @@ namespace db {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;
 			stmt = (*globalConnnection)->createStatement();
-			stmt->execute("LOCK TABLE gametablequeue WRITE");
+			stmt->execute("LOCK TABLE mafiadata.gametablequeue WRITE");
 			prep_stmt = (*globalConnnection)->prepareStatement(
-				"INSERT INTO gametablequeue(port) VALUES(?)");
+				"INSERT INTO mafiadata.gametablequeue(port) VALUES(?)");
 			prep_stmt->setUInt64(1, port);
 			prep_stmt->execute();
 			stmt->execute("UNLOCK TABLES");
@@ -24,7 +27,7 @@ namespace db {
 			sql::PreparedStatement* prep_stmt;
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
-				"INSERT INTO Games(port,maxPlayers,rankedGame,lockedGame,startedGame,gameEnded) VALUES(?,?,?,?,false,false)");
+				"INSERT INTO mafiadata.games(port,maxPlayers,rankedGame,lockedGame,startedGame,gameEnded) VALUES(?,?,?,?,false,false)");
 			prep_stmt->setUInt64(1, port);
 			prep_stmt->setInt(2, maxPlayers);
 			if (settings == 0) {
@@ -52,7 +55,7 @@ namespace db {
 			sql::PreparedStatement* prep_stmt;
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
-				"INSERT INTO mafiadata.gameroles(gameId,roleConfig) VALUES( (SELECT gameId FROM mafiadata.games WHERE port = ? LIMIT 1) ,?);");
+				"INSERT INTO mafiadata.gameRoles(gameId,roleConfig) VALUES( (SELECT gameId FROM mafiadata.games WHERE port = ? LIMIT 1) ,?);");
 			prep_stmt->setUInt64(1, port);
 			prep_stmt->setInt(2, roleConfig);
 			prep_stmt->execute();

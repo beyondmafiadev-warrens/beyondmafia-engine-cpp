@@ -1,3 +1,4 @@
+#pragma once
 #include <ctime>
 #include <string>
 #include <boost/bind.hpp>
@@ -20,8 +21,8 @@ namespace clientServer {
             /// ADD DATABASE INFO HERE OR ENGINE WILL NOT WORK 
             /// COMPILE WITH DETAILS 
             /// </summary>
-            std::string DATABASE_USER = "anthony";
-            std::string DATABASE_PASSWORD = "Sababa2094!";
+            std::string DATABASE_USER = "ENTER USER";
+            std::string DATABASE_PASSWORD = "ENER PASSWORD";
             std::string DATABASE_IP = "127.0.0.1";
             int DATABASE_PORT = 3306;
             /// <summary>

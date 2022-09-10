@@ -1,5 +1,5 @@
 #pragma once
-enum ROLES : uint64_t {
+enum ROLES {
 	//0000
 	VILLAGER = 0x0,
 	//0001
@@ -16,12 +16,12 @@ enum ROLES : uint64_t {
 	LAWYER = 0x20
 };
 
-enum CYCLE : uint64_t {
+enum CYCLE {
 	NIGHT = 0x0, 
 	DAY = 0x1,
 };
 
-enum ITEM : uint64_t {
+enum ITEM{
 	//0000 
 	SINGLE_USE = 0x0,
 	//0001
@@ -36,6 +36,5 @@ enum ITEM : uint64_t {
 	ROLEBLOCK = 0x10,
 
 	LAW = 0x20, 
-
 
 };

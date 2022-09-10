@@ -1,16 +1,8 @@
-#define BOOST_TEST_MODULE socketTest
-#include <boost/test/included/unit_test.hpp>
-#include "../Src/mafiaServer.h"
+#include "../mafiaServer.h"
 #include <boost/thread.hpp>
 
-BOOST_AUTO_TEST_CASE(createSocket)
+int main(int argc, char* argv[])
 {
-	/*for (int i = 0; i < 10; i++) {
-		Game * game = new Game();
-		boost::thread  t = boost::thread(&Game::createPlayers, game, 5);
-		t.join();
-		delete game;
-	}*/
     std::shared_ptr<boost::asio::io_context> io_service(new boost::asio::io_service);
     boost::shared_ptr<boost::asio::io_context::work> work(new boost::asio::io_service::work(*io_service));
     boost::shared_ptr<boost::asio::io_context::strand> strand(new boost::asio::io_service::strand(*io_service));
@@ -32,6 +24,5 @@ BOOST_AUTO_TEST_CASE(createSocket)
 #endif
         workers.add_thread(t);
     }
-
     workers.join_all();
 }

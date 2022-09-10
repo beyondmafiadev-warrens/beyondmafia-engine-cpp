@@ -1,3 +1,4 @@
+#pragma once
 #include <memory>
 #include <deque>
 #include <boost/beast/core/tcp_stream.hpp>
@@ -5,7 +6,6 @@
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
-#include <boost/json.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast.hpp>
 #include <boost/beast/websocket.hpp>

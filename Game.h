@@ -1,4 +1,4 @@
-#include <boost/json.hpp>
+#pragma once
 #include <list>
 #include <set>
 #include <random>
