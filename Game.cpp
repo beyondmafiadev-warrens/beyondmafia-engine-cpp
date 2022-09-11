@@ -511,7 +511,7 @@ namespace game {
 	}
 
 	void Game::emitStalkerMessage(uint64_t targetUuid) {
-		std::string writeMessage = "{\"cmd\": 3,\"role\":" + std::to_string(playerMapping.at(targetUuid).getRoleConfig()) + ",\"action\":4}";
+	  std::string writeMessage = "{\"cmd\": 3,\"playerid\":"  + std::to_string(targetUuid) + ",\"role\":" + std::to_string(playerMapping.at(targetUuid).getRoleConfig()) + ",\"action\":4}";
 		std::array<char, MAX_IP_PACK_SIZE> writeString;
 		memset(writeString.data(), '\0', writeString.size());
 		std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());

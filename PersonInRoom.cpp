@@ -17,7 +17,7 @@ namespace gameServer {
         }
 
         // Allow address reuse
-        acceptor_.set_option(net::socket_base::reuse_address(false), ec);
+        acceptor_.set_option(net::socket_base::reuse_address(true), ec);
         if (ec)
         {
             return;
@@ -38,7 +38,8 @@ namespace gameServer {
             return;
         }
         client_->insertWebsocket(acceptor_.local_endpoint().port());
-
+	std::string cmd = "ufw allow " + std::to_string(acceptor_.local_endpoint().port()) + "/tcp" ;
+	system(cmd.c_str());
     };
     int listener::getPort() {
         return port_;
@@ -201,18 +202,15 @@ namespace gameServer {
 
     void session::on_send(std::string message) {
         bool write_in_progress = !write_msgs_.empty();
-        if (message.size() > 0) {
-            write_msgs_.push_back(message);
-        }
+        write_msgs_.push_back(message);
         if (!write_in_progress) {
-            return;
-        }
         ws_->async_write(boost::asio::buffer(write_msgs_.front(), write_msgs_.front().size()), boost::asio::bind_executor(strand_,
             beast::bind_front_handler(
                 &session::on_write,
                 shared_from_this())));
+	}
     }
-
+  
     void
         session::on_write(
             beast::error_code ec,
@@ -288,10 +286,10 @@ namespace gameServer {
                 if (command == -3) {
                     std::string cookie = val.at("auth").as_string().data();
                     if (this->verifyUser(cookie)) {
-                        this->addPlayer();
+		      this->addPlayer();
                         this->sendPlayerId();
                         this->sendGameDetails();
-                        this->joinRoom();
+			this->joinRoom();
                         this->verified = true;
                     }
                     else {
@@ -370,22 +368,23 @@ namespace gameServer {
     };
 
     void personInRoom::sendGameDetails() {
-        if (listener_ != nullptr && listener_->getWebsocket() != nullptr) {
-            auto websocketClient = listener_->getWebsocket().get();
-            if (websocketClient) {
-                websocketClient->send(game_.printGameDetails());
-            }
-        }
+      std::set<uint64_t> recipients;
+      recipients.insert(this->userId_);
+      std::string writeMessage = game_.printGameDetails();
+      std::array<char, MAX_IP_PACK_SIZE> writeString;
+      memset(writeString.data(), '\0', writeString.size());
+      std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+      room_.emitStateless(std::make_pair(writeString, recipients));
     }
 
     void personInRoom::sendPlayerId() {
-        std::string sendMessage = "{\"cmd\":-3, \"playerId\":" + std::to_string(this->userId_) + '}';
-        if (listener_ != nullptr && listener_->getWebsocket() != nullptr) {
-            auto websocketClient = listener_->getWebsocket().get();
-            if (websocketClient) {
-                websocketClient->send(std::ref(sendMessage));
-            }
-        }
+      std::set<uint64_t> recipients;
+      recipients.insert(this->userId_);
+      std::string writeMessage = "{\"cmd\":-3, \"playerId\":" + std::to_string(this->userId_) + '}';
+      std::array<char, MAX_IP_PACK_SIZE> writeString;
+      memset(writeString.data(), '\0', writeString.size());
+      std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+      room_.emitStateless(std::make_pair(writeString, recipients));
     }
 
     void personInRoom::startHandler(const boost::system::error_code& error)
@@ -408,7 +407,7 @@ namespace gameServer {
         if (listener_ != nullptr && listener_->getWebsocket() != nullptr) {
             auto websocketClient = listener_->getWebsocket().get();
             if (websocketClient) {
-                websocketClient->send(std::ref(websocketMessage));
+                websocketClient->send(websocketMessage);
             }
         }
     }
@@ -429,7 +428,7 @@ namespace gameServer {
     }
     void personInRoom::createWebsocket() {
         std::shared_ptr<boost::asio::io_context> io_service(new boost::asio::io_context);
-        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0);
+        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string("0.0.0.0"), 0);
         std::shared_ptr<listener>listener (new gameServer::listener(io_service, endpoint, shared_from_this()));
         listener.swap(listener_);
         listener_->run();
