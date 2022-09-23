@@ -131,5 +131,6 @@ namespace game{
 		std::vector<std::thread*> gameThread;
 		std::shared_ptr<db::database> database_;
 		int port_;
+	  std::set<uint64_t> globalPlayers;
 	};
 }

@@ -128,6 +128,12 @@ namespace gameServer {
 
 
         // Set a decorator to change the Server of the handshake
+      websocket::stream_base::timeout opt{
+	websocket::stream_base::none(),  
+	std::chrono::seconds(5),        // idle timeout
+	true
+      };
+      ws_->set_option(opt);
         ws_->set_option(websocket::stream_base::decorator(
             [](websocket::response_type& res)
             {
@@ -286,6 +292,7 @@ namespace gameServer {
                 if (command == -3) {
                     std::string cookie = val.at("auth").as_string().data();
                     if (this->verifyUser(cookie)) {
+		      
 		      this->addPlayer();
                         this->sendPlayerId();
                         this->sendGameDetails();

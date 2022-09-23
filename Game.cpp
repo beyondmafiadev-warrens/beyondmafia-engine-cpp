@@ -634,6 +634,7 @@ namespace game {
 
 	int Game::addPlayer(uint64_t uuid) {
 		if (alivePlayers.size() < availableRoles.size()) {
+		  globalPlayers.insert(uuid);
 			alivePlayers.insert(uuid);
 			std::set<uint64_t> recipients;
 			std::array<char, MAX_IP_PACK_SIZE> writeString;
@@ -699,7 +700,12 @@ namespace game {
 			}
 		}
 		retString.pop_back();
-		retString += "],\"size\":" + std::to_string(alivePlayers.size()) + ",\"maxSize\":" + std::to_string(availableRoles.size()) + '}';
+		retString += "],\"size\":" + std::to_string(alivePlayers.size()) + ",\"maxSize\":" + std::to_string(availableRoles.size()) + ",\"globalPlayers\":[";
+		for (auto i = globalPlayers.begin(); i != globalPlayers.end(); i++) {
+		  retString += std::to_string(*i) + ',';
+		}
+		retString.pop_back();
+		retString+= "]}";
 		return retString;
 	}
 
