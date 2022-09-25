@@ -154,6 +154,7 @@ namespace gameServer {
         if (ec)
             return;
         // Read a message
+	client_->verified = false; 
         session::do_read();
     };
     void
@@ -293,7 +294,7 @@ namespace gameServer {
                     std::string cookie = val.at("auth").as_string().data();
                     if (this->verifyUser(cookie)) {
 		      
-		      this->addPlayer();
+		        this->addPlayer();
                         this->sendPlayerId();
                         this->sendGameDetails();
 			this->joinRoom();
@@ -311,14 +312,14 @@ namespace gameServer {
                     sendMessage = "{\"cmd\":-2, \"playerId\":" + std::to_string(this->userId_) + '}';
                     memset(sendBuffer.data(), '\0', sendBuffer.size());
                     std::copy(sendMessage.begin(), sendMessage.end(), sendBuffer.data());
-                    room_.broadcast(std::make_pair(sendBuffer, recipients), shared_from_this());
+                    room_.emitStateless(std::make_pair(sendBuffer, recipients));
                     break;
                 case(-1):
                     //Typing
                     sendMessage = "{\"cmd\":-1, \"playerId\":" + std::to_string(this->userId_) + '}';
                     memset(sendBuffer.data(), '\0', sendBuffer.size());
                     std::copy(sendMessage.begin(), sendMessage.end(), sendBuffer.data());
-                    room_.broadcast(std::make_pair(sendBuffer, recipients), shared_from_this());
+                    room_.emitStateless(std::make_pair(sendBuffer, recipients));
                     break;
                 case(0):
                     sendMessage = "{\"cmd\": 0, \"msg\":";
@@ -420,10 +421,11 @@ namespace gameServer {
     }
     void personInRoom::addPlayer() {
         if (!room_.hasPlayer(userId_)) {
-            room_.enter(shared_from_this(), userId_);
-            game_.addPlayer(userId_);
+	    game_.addPlayer(userId_);
             database_->insertPlayer(port_, userId_);
-        }
+	}
+            room_.enter(shared_from_this(), userId_);
+	    this->verified = false; 
     }
 
     std::shared_ptr<cli::client> personInRoom::createClient(int playerId) {

@@ -138,6 +138,7 @@ namespace gameServer {
         void createWebsocket();
         void insertWebsocket(int port);
         void deleteSocket();
+        bool verified = false; 
     private:
         void startHandler(const boost::system::error_code& error);
         void parseWebsocketMessage(boost::json::value& val, std::array<char, MAX_IP_PACK_SIZE>& msg);
@@ -155,7 +156,6 @@ namespace gameServer {
         std::array<char, MAX_IP_PACK_SIZE> read_msg_;
         std::deque<std::array<char, MAX_IP_PACK_SIZE> > write_msgs_;
         int userId_;
-        bool verified = false; 
         std::shared_ptr<listener> listener_;
         std::shared_ptr<db::database> database_;
         std::shared_ptr<boost::thread> t;
