@@ -35,10 +35,11 @@ namespace game{
 
 	class Game {
 	public:
-		Game(chat::chatRoom& chatroom, std::shared_ptr<db::database> database, int port);
+		Game(chat::chatRoom& chatroom, std::shared_ptr<db::database> database, int port, boost::asio::steady_timer& gameTimer);
 		int addPlayer(uint64_t uuid);
+		bool isEmpty();
 		int addSpectator(uint64_t uuid);
-		void createGame(uint64_t settings, boost::json::array roles);
+		void createGame(uint64_t settings, uint64_t setupId);
 		void startGame();
 		void unvote(uint64_t roleAction, uint64_t uuid);
 		void removePlayer(uint64_t playerid);
@@ -47,14 +48,21 @@ namespace game{
 		void emitStatusMessageStateless(uint64_t playerid);
 		std::set<uint64_t> getPlayerMeeting(uint64_t playerid);
 		bool isStarted();
+		bool hasEnded();
+		void addKicks(uint64_t playerid);
+		void kickAllPlayers();
 	private:
+		void initalizeGame();
+		void startTimer();
+		void queueKicks();
+		void kickPlayers();
 		void start();
 		bool killUserAlt(uint64_t playerID);
 		bool killUserVillage(uint64_t playerID);
 		bool meetingCheck(uint64_t roleConfig, int amountVotes);
 		void sendUpdateGameState();
 		void handleMeeting(uint64_t roleConfig);
-		bool checkVotes(int cycleTime);
+		bool checkVotes();
 		bool canVote(uint64_t roleAction, uint64_t target);
 		//Mafia 
 		void mafiaMeeting();
@@ -90,7 +98,7 @@ namespace game{
 		void useStalkerMeeting(uint64_t uuid, std::list<uint64_t>targets);
 		void useJanitorMeeting(uint64_t uuid, std::list<uint64_t>targets);
 		void endGame();
-		bool gameOver();
+		int gameOver();
 		std::array<char, MAX_IP_PACK_SIZE> getMessage(std::string writeMessage);
 		void switchCycle();
 		void wait(int seconds);
@@ -131,6 +139,8 @@ namespace game{
 		std::vector<std::thread*> gameThread;
 		std::shared_ptr<db::database> database_;
 		int port_;
+		boost::asio::steady_timer &gameTimer_;
+		uint64_t setupId; 
 	  std::set<uint64_t> globalPlayers;
 	};
 }

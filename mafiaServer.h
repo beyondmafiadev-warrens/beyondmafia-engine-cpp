@@ -15,7 +15,7 @@ namespace clientServer {
         server(boost::asio::io_context& io_service,
             boost::asio::io_context::strand& strand,
             const tcp::endpoint& endpoint)
-            : io_service_(io_service), strand_(strand), acceptor_(io_service, endpoint)
+            : io_service_(io_service), strand_(strand), acceptor_(io_service, endpoint), timer_(io_service_,boost::asio::chrono::seconds(1)), gameTimer_(io_service_,boost::asio::chrono::minutes(5))
         {
             /// <summary>
             /// ADD DATABASE INFO HERE OR ENGINE WILL NOT WORK 
@@ -33,8 +33,9 @@ namespace clientServer {
             port_ = acceptor_.local_endpoint().port();
             database_ = std::make_shared<db::database>(db::database(DATABASE_IP, DATABASE_PORT,DATABASE_USER,DATABASE_PASSWORD));
             database_->insertGamePort(port_);
-            std::shared_ptr<game::Game>game(new game::Game(room_,database_,port_));
+            std::shared_ptr<game::Game>game(new game::Game(room_,database_,port_, gameTimer_));
             game_ = game;
+	timer_.async_wait(boost::bind(&server::checkGame, this));
             run();
         }
 
@@ -52,9 +53,53 @@ namespace clientServer {
             if (!error)
             {
                 new_participant->start();
+  		participants.push_back(new_participant);
             }
 
             run();
+        }
+	 void checkGame()
+        {
+            if (!game_->isStarted()) {
+                timer_.expires_after(boost::asio::chrono::minutes(1));
+                timer_.async_wait(boost::bind(&server::queueGameForDestruction, this));
+            }
+            else if (game_->hasEnded()) {
+                timer_.expires_after(boost::asio::chrono::minutes(3));
+                timer_.async_wait(boost::bind(&server::queueGameForDestruction, this));
+            }
+            else {
+                timer_.expires_after(boost::asio::chrono::minutes(1));
+                timer_.async_wait(boost::bind(&server::checkGame, this));
+            }
+        }
+
+        void finishGame() {
+            for (auto ptr : participants) {
+                ptr.reset();
+            }
+            acceptor_.close();
+            io_service_.stop();
+        }
+        void queueGameForDestruction() {
+            if (game_->isEmpty()) {
+                database_->deleteGame();
+                database_->deleteGamePort(port_);
+                for (auto ptr : participants) {
+                    ptr.reset();
+                }
+                acceptor_.close();
+                io_service_.stop();
+            }
+            else if (game_->hasEnded()) {
+                game_->kickAllPlayers();
+                timer_.expires_after(boost::asio::chrono::minutes(2));
+                timer_.async_wait(boost::bind(&server::finishGame, this));
+            }
+            else {
+                timer_.expires_after(boost::asio::chrono::minutes(1));
+                timer_.async_wait(boost::bind(&server::checkGame, this));
+            }
         }
         uint64_t port_;
         boost::asio::io_context& io_service_;
@@ -63,6 +108,9 @@ namespace clientServer {
         chat::chatRoom room_;
         std::shared_ptr<db::database> database_;
         std::shared_ptr<game::Game> game_;
+        std::vector<std::shared_ptr<gameServer::personInRoom>> participants;
+        boost::asio::steady_timer timer_;
+        boost::asio::steady_timer gameTimer_;
     };
     class workerThread
     {

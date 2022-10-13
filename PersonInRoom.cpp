@@ -38,8 +38,6 @@ namespace gameServer {
             return;
         }
         client_->insertWebsocket(acceptor_.local_endpoint().port());
-	std::string cmd = "ufw allow " + std::to_string(acceptor_.local_endpoint().port()) + "/tcp" ;
-	system(cmd.c_str());
     };
     int listener::getPort() {
         return port_;
@@ -293,7 +291,6 @@ namespace gameServer {
                 if (command == -3) {
                     std::string cookie = val.at("auth").as_string().data();
                     if (this->verifyUser(cookie)) {
-		      
 		        this->addPlayer();
                         this->sendPlayerId();
                         this->sendGameDetails();
@@ -338,6 +335,9 @@ namespace gameServer {
                     game_.removePlayer(this->userId_);
                     database_->deleteGamePlayers(this->userId_);
                     database_->deleteWebsocket(this->userId_);
+                    break;
+		case(3):
+                    game_.addKicks(this->userId_);
                     break;
                 }
             }
@@ -437,7 +437,7 @@ namespace gameServer {
     }
     void personInRoom::createWebsocket() {
         std::shared_ptr<boost::asio::io_context> io_service(new boost::asio::io_context);
-        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string("0.0.0.0"), 0);
+        boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0);
         std::shared_ptr<listener>listener (new gameServer::listener(io_service, endpoint, shared_from_this()));
         listener.swap(listener_);
         listener_->run();
@@ -479,8 +479,8 @@ namespace gameServer {
                 //Create Game API 
             case(0):
                 settingsConfig = val.at("settings").get_int64();
-                roleArray = val.at("roles").get_array();
-                game_.createGame(settingsConfig, roleArray);
+                game_.createGame(settingsConfig,
+                    val.at("setupId").get_int64());
                 return 0;
             case(1):
                 playerId = val.at("playerid").get_int64();

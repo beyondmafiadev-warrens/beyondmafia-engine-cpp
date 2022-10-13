@@ -34,27 +34,60 @@ namespace game {
 		return false;
 	}
 
-	Game::Game(chat::chatRoom& chatroom, std::shared_ptr<db::database> database, int port) :
-		chatroom_(chatroom), database_(database), port_(port) {
+	Game::Game(chat::chatRoom& chatroom, std::shared_ptr<db::database> database, int port, boost::asio::steady_timer& gameTimer) :
+		chatroom_(chatroom), database_(database), port_(port), gameTimer_(gameTimer) {
 		this->state = 0;
 		this->cycle = false;
 		this->started = false;
+		this->ended = false;
+	}
+	bool Game::isEmpty() {
+		return alivePlayers.empty();
 	}
 
 	void Game::removePlayer(uint64_t playerid) {
 		auto it = alivePlayers.find(playerid);
 		if (it != alivePlayers.end()) {
 			alivePlayers.erase(it);
-			std::set<uint64_t> recipients;
-			std::array<char, MAX_IP_PACK_SIZE> writeString;
-			std::string writeMessage = "{\"cmd\": 6,  \"playerid\":" + std::to_string(playerid) + '}';
-			memset(writeString.data(), '\0', writeString.size());
-			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
-			chatroom_.emitStateless(std::make_pair(writeString, recipients));
+			if (this->started) {
+				Role role = playerMapping.at(playerid);
+				bool isAlive = role.isAlive();
+				if (isAlive) {
+					uint64_t config = role.getRoleConfig();
+					playerMapping.at(playerid).setAlive(false);
+					meetingList[config].erase(playerid);
+					meetingVotes[config].erase(playerid);
+					if (config != VILLAGER) {
+						meetingList[VILLAGER].erase(playerid);
+						meetingVotes[VILLAGER].erase(playerid);
+					}
+					if (config != MAFIA && config & MAFIA) {
+						meetingList[MAFIA].erase(playerid);
+						meetingVotes[MAFIA].erase(playerid);
+					}
+					deadPlayers.insert(playerid);
+					std::set<uint64_t> recipients;
+					std::array<char, MAX_IP_PACK_SIZE> writeString;
+					std::string writeMessage = "{\"cmd\": -6,  \"playerid\":" + std::to_string(playerid) + '}';
+					memset(writeString.data(), '\0', writeString.size());
+					std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+					chatroom_.emitStateless(std::make_pair(writeString, recipients));
+				}
+			}
 		}
 	}
-
-	void Game::createGame(uint64_t settings, boost::json::array roles) {
+	void Game::kickAllPlayers() {
+		for (auto i = playerMapping.begin(); i != playerMapping.end(); i++) {
+			database_->deleteGamePlayers(i->first);
+			database_->deleteWebsocket(i->first);
+		}
+	}
+	bool Game::hasEnded() {
+		return this->ended;
+	}
+	void Game::createGame(uint64_t settings, uint64_t setupId) {
+		boost::json::array roles = boost::json::parse(database_->getRoles(setupId)).as_array();
+		this->setupId = setupId;
 		this->settings_ = settings;
 		for (int i = 0; i < roles.size(); i++) {
 			boost::json::value val = roles[i];
@@ -146,6 +179,47 @@ namespace game {
 	bool Game::isStarted() {
 		return this->started;
 	}
+	void Game::startTimer() {
+		if (this->state % 2 == 0) {
+			//day
+			gameTimer_.expires_after(boost::asio::chrono::minutes(1));
+		}
+		else {
+			//night
+			gameTimer_.expires_after(boost::asio::chrono::minutes(1));
+		}
+		gameTimer_.async_wait(boost::bind(&Game::queueKicks, this));
+	}
+
+	void Game::addKicks(uint64_t playerID) {
+		Role role = playerMapping.at(playerID);
+		uint64_t config = role.getRoleConfig();
+		bool check = true;
+		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
+			if (*i & config && (meetingVotes.at(*i).at(playerID).empty() || meetingVotes.at(*i).at(playerID).front() == 0)) {
+				check = false;
+				break;
+			}
+		}
+		if (check && kickedList.find(playerID) == kickedList.end()) {
+			kickedList.insert(playerID);
+			std::set<uint64_t> sendPlayers;
+			std::string writeMessage = "{\"cmd\": -5, \"count\":" + std::to_string((int)(std::floor(alivePlayers.size() / 2.0)) - kickedList.size()) + "}";
+			std::array<char, MAX_IP_PACK_SIZE> writeString;
+			memset(writeString.data(), '\0', writeString.size());
+			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+			chatroom_.emitMessage(std::make_pair(writeString, sendPlayers));
+		}
+	}
+
+	void Game::queueKicks() {
+		std::set<uint64_t> sendPlayers;
+		std::string writeMessage = "{\"cmd\": -5, \"count\":" + std::to_string((int)(std::floor(alivePlayers.size() / 2.0))) + "}";
+		std::array<char, MAX_IP_PACK_SIZE> writeString;
+		memset(writeString.data(), '\0', writeString.size());
+		std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+		chatroom_.emitMessage(std::make_pair(writeString, sendPlayers));
+	}
 
 	void Game::start() {
 
@@ -229,11 +303,49 @@ namespace game {
 					}
 					this->state = 1;
 					Game::sendUpdateGameState();
+					Game::startTimer();
+					database_->updateStartedGameState();
 				}
-				if (Game::checkVotes(60)) {
+				if (Game::checkVotes() || Game::gameOver() >= 0) {
 					Game::parseGlobalMeetings();
 					Game::switchCycle();
-					if (Game::gameOver()) {
+					int gameOverCheck = Game::gameOver();
+					if (gameOverCheck >= 0) {
+						if (gameOverCheck == 0) {
+							std::string writeMessage = "{\"cmd\": -4,\"role\":0}";
+							std::set<uint64_t> recipients;
+							std::array<char, MAX_IP_PACK_SIZE> writeString;
+							memset(writeString.data(), '\0', writeString.size());
+							std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+							chatroom_.emitMessage(std::make_pair(writeString, recipients));
+							for (auto i = playerMapping.begin(); i != playerMapping.end(); i++) {
+								if (!(i->second.getRoleConfig() & MAFIA)) {
+									database_->insertGameStats(i->first, std::ceil(120 - 120 * database_->getSetupStats(this->setupId)), true);
+								}
+								else if(i->second.getRoleConfig() & MAFIA) {
+									database_->insertGameStats(i->first, 0, false);
+								}
+							}
+						}
+						else if (gameOverCheck == 1) {
+							std::string writeMessage = "{\"cmd\": -4,\"role\":1}";
+							std::set<uint64_t> recipients;
+							std::array<char, MAX_IP_PACK_SIZE> writeString;
+							memset(writeString.data(), '\0', writeString.size());
+							std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+							chatroom_.emitMessage(std::make_pair(writeString, recipients));
+							for (auto i = playerMapping.begin(); i != playerMapping.end(); i++) {
+								if (!(i->second.getRoleConfig() & MAFIA)) {
+									database_->insertGameStats(i->first, 0, false);
+								}
+								else if (i->second.getRoleConfig() & MAFIA) {
+									database_->insertGameStats(i->first, std::ceil(120 - (120 * (1 - database_->getSetupStats(this->setupId)))), true);
+								}
+							}
+						}
+						database_->updateSetupStats(this->setupId, gameOverCheck);
+						database_->updateEndGameState();
+						this->ended = true;
 						break;
 					}
 					this->state += 1;
@@ -243,27 +355,14 @@ namespace game {
 			}
 		}
 	}
-
-	bool Game::gameOver() {
+	int Game::gameOver() {
 		if (meetingList[MAFIA].size() == 0) {
-			std::string writeMessage = "{\"cmd\": -4,\"role\":1}";
-			std::set<uint64_t> recipients;
-			std::array<char, MAX_IP_PACK_SIZE> writeString;
-			memset(writeString.data(), '\0', writeString.size());
-			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
-			chatroom_.emitMessage(std::make_pair(writeString, recipients));
-			return true;
+			return 0;
 		}
 		else if (meetingList[MAFIA].size() >= meetingList[VILLAGER].size() - meetingList[MAFIA].size()) {
-			std::string writeMessage = "{\"cmd\": -4,\"role\":1}";
-			std::set<uint64_t> recipients;
-			std::array<char, MAX_IP_PACK_SIZE> writeString;
-			memset(writeString.data(), '\0', writeString.size());
-			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
-			chatroom_.emitMessage(std::make_pair(writeString, recipients));
-			return true;
+			return 1;
 		}
-		return false;
+		return -1;
 	}
 
 	void Game::sendUpdateGameState() {
@@ -273,7 +372,6 @@ namespace game {
 		memset(writeString.data(), '\0', writeString.size());
 		std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
 		chatroom_.emitMessage(std::make_pair(writeString, recipients));
-
 		for (auto i = playerMapping.begin(); i != playerMapping.end(); i++) {
 			if (!this->cycle && i->second.isAlive() && i->second.hasNightAction()) {
 				uint64_t roleConfig = i->second.getRoleConfig();
@@ -293,12 +391,45 @@ namespace game {
 		}
 	}
 
-	bool Game::checkVotes(int cycleTime) {
+	void Game::kickPlayers() {
+		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
+			auto playerVotes = meetingVotes.at(*i);
+			for (auto j = playerVotes.begin(); j != playerVotes.end(); j++) {
+				Role role = playerMapping.at(j->first);
+				bool isAlive = role.isAlive();
+				if (j->second.empty() && isAlive || isAlive && j->second.front() == 0) {
+					uint64_t config = role.getRoleConfig();
+					playerMapping.at(j->first).setAlive(false);
+					meetingList[config].erase(j->first);
+					meetingVotes[config].erase(j->first);
+					if (config != VILLAGER) {
+						meetingList[VILLAGER].erase(j->first);
+						meetingVotes[VILLAGER].erase(j->first);
+					}
+					if (config != MAFIA && config & MAFIA) {
+						meetingList[MAFIA].erase(j->first);
+						meetingVotes[MAFIA].erase(j->first);
+					}
+					deadPlayers.insert(j->first);
+					alivePlayers.erase(j->first);
+					std::set<uint64_t> sendPlayers;
+					std::string writeMessage = "{\"cmd\": -6,\"playerid\":" + std::to_string(j->first) + ",\"role\":" + std::to_string(config) + '}';
+					std::array<char, MAX_IP_PACK_SIZE> writeString;
+					memset(writeString.data(), '\0', writeString.size());
+					std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+					chatroom_.emitMessage(std::make_pair(writeString, sendPlayers));
+				}
+			}
+		}
+	}
+
+	bool Game::checkVotes() {
 		bool voteCheck = true;
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			auto playerVotes = meetingVotes.at(*i);
 			for (auto j = playerVotes.begin(); j != playerVotes.end(); j++) {
-				if (j->second.empty() || playerMapping.at(j->first).isAlive() && j->second.front() == 0) {
+				bool isAlive = playerMapping.at(j->first).isAlive();
+				if (j->second.empty() && isAlive || isAlive && j->second.front() == 0) {
 					voteCheck = false;
 					break;
 				}
@@ -307,16 +438,10 @@ namespace game {
 		if (voteCheck) {
 			return true;
 		}
-		if (difftime(time(NULL), this->cycleTime) >= cycleTime) {
-			if (static_cast<double>(kickedList.size()) > static_cast<double>(alivePlayers.size() / 2.0)) {				//Wait 5 seconds
-				//Check 
-				//Then return true
-
-				return true;
-			}
-			else {
-				return false;
-			}
+		if (kickedList.size() == (int)(std::floor(alivePlayers.size() / 2.0))) {
+			gameTimer_.expires_after(boost::asio::chrono::seconds(5));
+			gameTimer_.async_wait(boost::bind(&Game::kickPlayers, this));
+			std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 		return false;
 	}
@@ -462,7 +587,6 @@ namespace game {
 	void Game::handleStalkerMeeting(uint64_t targetUuid) {
 		Game::emitStalkerMessage(targetUuid);
 	}
-	
 	void Game::handleDoctorMeeting(uint64_t targetUuid) {
 		auto target = alivePlayers.find(targetUuid);
 		playerMapping.at(targetUuid).addItem(SAVE);
@@ -631,10 +755,25 @@ namespace game {
 			}
 		}
 	}
-
+	void Game::initalizeGame() {
+		if (alivePlayers.size() == availableRoles.size()) {
+			this->cycleTime = time(NULL);
+			this->started = true;
+			this->ended = false;
+			Game::startGame();
+		}
+		else {
+			std::string writeMessage = "{\"cmd\": -8}";
+			std::set<uint64_t> recipients;
+			std::array<char, MAX_IP_PACK_SIZE> writeString;
+			memset(writeString.data(), '\0', writeString.size());
+			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+			chatroom_.emitMessage(std::make_pair(writeString, recipients));
+		}
+	}
 	int Game::addPlayer(uint64_t uuid) {
 		if (alivePlayers.size() < availableRoles.size()) {
-		  globalPlayers.insert(uuid);
+			globalPlayers.insert(uuid);
 			alivePlayers.insert(uuid);
 			std::set<uint64_t> recipients;
 			std::array<char, MAX_IP_PACK_SIZE> writeString;
@@ -647,17 +786,17 @@ namespace game {
 			return addSpectator(uuid);
 		}
 		if (alivePlayers.size() == availableRoles.size()) {
-			std::string writeMessage = "{\"cmd\": 0,  \"action\":-1}";
-			std::list<uint64_t> recipients;
-			Game::wait(5);
-			if (alivePlayers.size() == availableRoles.size()) {
-				this->cycleTime = time(NULL);
-				this->started = true;
-				this->ended = false;
-				Game::startGame();
-			}
+			std::set<uint64_t> recipients;
+			std::string writeMessage = "{\"cmd\": -7}";
+			std::array<char, MAX_IP_PACK_SIZE> writeString;
+			memset(writeString.data(), '\0', writeString.size());
+			std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+			chatroom_.emitMessage(std::make_pair(writeString, recipients));
+			gameTimer_.expires_after(boost::asio::chrono::seconds(5));
+			gameTimer_.async_wait(boost::bind(&Game::initalizeGame, this));
 		}
 		return 1;
+
 	}
 
 	void Game::wait(int seconds) {
