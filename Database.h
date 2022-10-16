@@ -122,7 +122,7 @@ namespace db {
 				prep_stmt->setInt(1, playerid);
 			}
 			prep_stmt->executeQuery();
-			delete prep__stmt;
+			delete prep_stmt;
 		}
 		std::string getRoles(uint64_t id) {
 			sql::PreparedStatement* prep_stmt;			

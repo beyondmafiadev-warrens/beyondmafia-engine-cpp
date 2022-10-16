@@ -125,7 +125,8 @@ namespace gameServer {
     public:
         personInRoom(boost::asio::io_context& io_service,
             boost::asio::io_service::strand& strand, chat::chatRoom& room, uint64_t port, game::Game& game, std::shared_ptr<db::database> database);
-
+        
+        bool verified = false;
         tcp::socket& socket();
         void start();
         void onMessage(std::array<char, MAX_IP_PACK_SIZE>& msg);
@@ -154,8 +155,7 @@ namespace gameServer {
         chat::chatRoom& room_;
         std::array<char, MAX_IP_PACK_SIZE> read_msg_;
         std::deque<std::array<char, MAX_IP_PACK_SIZE> > write_msgs_;
-        int userId_;
-        bool verified = false; 
+        int userId_; 
         std::shared_ptr<listener> listener_;
         std::shared_ptr<db::database> database_;
         std::shared_ptr<boost::thread> t;

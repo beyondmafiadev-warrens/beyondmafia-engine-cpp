@@ -40,12 +40,14 @@ namespace game {
 		this->cycle = false;
 		this->started = false;
 		this->ended = false;
+		this->mutex_ = new std::mutex();
 	}
 	bool Game::isEmpty() {
 		return alivePlayers.empty();
 	}
 
-	void Game::removePlayer(uint64_t playerid) {
+  void Game::removePlayer(uint64_t playerid) {
+		  std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		auto it = alivePlayers.find(playerid);
 		if (it != alivePlayers.end()) {
 			alivePlayers.erase(it);
@@ -68,11 +70,19 @@ namespace game {
 					deadPlayers.insert(playerid);
 					std::set<uint64_t> recipients;
 					std::array<char, MAX_IP_PACK_SIZE> writeString;
-					std::string writeMessage = "{\"cmd\": -6,  \"playerid\":" + std::to_string(playerid) + '}';
+					std::string writeMessage = "{\"cmd\": -6,\"playerid\":" + std::to_string(playerid) + ",\"role\":" + std::to_string(config) + '}';
 					memset(writeString.data(), '\0', writeString.size());
 					std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
-					chatroom_.emitStateless(std::make_pair(writeString, recipients));
+					chatroom_.emitMessage(std::make_pair(writeString, recipients));
 				}
+			}
+			else{
+			  std::set<uint64_t> recipients;
+			  std::array<char, MAX_IP_PACK_SIZE> writeString;
+			  std::string writeMessage = "{\"cmd\": -7,  \"playerid\":" + std::to_string(playerid) + '}';
+			  memset(writeString.data(), '\0', writeString.size());
+			  std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+			  chatroom_.emitStateless(std::make_pair(writeString, recipients));
 			}
 		}
 	}
@@ -116,6 +126,7 @@ namespace game {
 		std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
 		chatroom_.emitMessage(std::make_pair(writeString, sendPlayers));
 	}
+  
 	bool Game::canVote(uint64_t roleAction, uint64_t target) {
 		switch (roleAction) {
 		case(MAFIA):
@@ -195,6 +206,7 @@ namespace game {
 		Role role = playerMapping.at(playerID);
 		uint64_t config = role.getRoleConfig();
 		bool check = true;
+		  std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			if (*i & config && (meetingVotes.at(*i).at(playerID).empty() || meetingVotes.at(*i).at(playerID).front() == 0)) {
 				check = false;
@@ -224,9 +236,6 @@ namespace game {
 	void Game::start() {
 
 		while (true) {
-			if (this->ended) {
-				Game::endGame();
-			}
 			if (this->started) {
 				//Game initalization
 				if (playerMapping.empty()) {
@@ -367,6 +376,7 @@ namespace game {
 
 	void Game::sendUpdateGameState() {
 		std::string writeMessage = "{\"cmd\": 7, \"state\":" + std::to_string(this->state) + '}';
+		database_->updateGameState();
 		std::set<uint64_t> recipients;
 		std::array<char, MAX_IP_PACK_SIZE> writeString;
 		memset(writeString.data(), '\0', writeString.size());
@@ -392,6 +402,7 @@ namespace game {
 	}
 
 	void Game::kickPlayers() {
+	   std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			auto playerVotes = meetingVotes.at(*i);
 			for (auto j = playerVotes.begin(); j != playerVotes.end(); j++) {
@@ -425,6 +436,7 @@ namespace game {
 
 	bool Game::checkVotes() {
 		bool voteCheck = true;
+		 std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			auto playerVotes = meetingVotes.at(*i);
 			for (auto j = playerVotes.begin(); j != playerVotes.end(); j++) {
@@ -458,8 +470,7 @@ namespace game {
 
 	void Game::switchCycle() {
 		this->cycle = !this->cycle;
-		this->cycleTime = time(NULL);
-
+		std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		for (auto i = meetingVotes.begin(); i != meetingVotes.end(); i++) {
 			for (auto j = i->second.begin(); j != i->second.end(); j++) {
 				j->second.clear();
@@ -651,6 +662,7 @@ namespace game {
 	//Emit message based on return valu
 	bool Game::killUserAlt(uint64_t playerID) {
 		std::list<uint64_t> items = playerMapping.at(playerID).getItems();
+		std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		//Use custom comparator
 		std::list<uint64_t>::iterator docFound = std::find(items.begin(), items.end(), SAVE);
 		std::list<uint64_t>::iterator vestFound = std::find_if(items.begin(), items.end(), [](const uint64_t& itemConfig) {
@@ -705,6 +717,7 @@ namespace game {
 	}
 
 	bool Game::killUserVillage(uint64_t playerID) {
+	        std::lock_guard<std::mutex> iterationMutex(*mutex_);
 		std::list<uint64_t> items = playerMapping.at(playerID).getItems();
 		auto target = alivePlayers.find(playerID);
 		if (target != alivePlayers.end()) {
@@ -800,11 +813,7 @@ namespace game {
 	}
 
 	void Game::wait(int seconds) {
-		time_t currentTime = time(NULL);
-		while (!difftime(time(NULL), currentTime) >= seconds) {
-
-		}
-		return;
+	        
 	}
 
 	int Game::addSpectator(uint64_t uuid) {

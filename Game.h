@@ -52,6 +52,7 @@ namespace game{
 		void addKicks(uint64_t playerid);
 		void kickAllPlayers();
 	private:
+	  std::mutex * mutex_;
 		void initalizeGame();
 		void startTimer();
 		void queueKicks();
