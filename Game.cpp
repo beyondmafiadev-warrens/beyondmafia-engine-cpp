@@ -498,6 +498,7 @@ namespace game {
 	}
 
 	void Game::switchCycle() {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->cycle = !this->cycle;
 		for (auto i = meetingVotes.begin(); i != meetingVotes.end(); i++) {
 			for (auto j = i->second.begin(); j != i->second.end(); j++) {
@@ -626,6 +627,7 @@ namespace game {
 	}
 
 	void Game::handleCopMeeting(uint64_t targetUuid) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		std::list<uint64_t> items = playerMapping.at(targetUuid).getItems();
 		bool millerFound = std::find_if(items.begin(), items.end(), [](const uint64_t& itemConfig) {
 			return itemConfig & MILLER_VEST;
@@ -818,6 +820,7 @@ namespace game {
 	}
 
 	void Game::parseGlobalMeetings() {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			switch (*i) {
 			case(MAFIA):
@@ -995,6 +998,7 @@ namespace game {
 	}
 
 	bool Game::meetingCheck(uint64_t roleConfig,int amountVotes) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		if (
 			static_cast<double>(amountVotes) > static_cast<double>(meetingList[roleConfig].size()) / 2.0) {
 			return true;
