@@ -184,6 +184,7 @@ namespace game {
 	}
 
 	void Game::vote(uint64_t roleAction, uint64_t uuid, uint64_t target) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		if (std::find(allRoles.begin(), allRoles.end(), roleAction) != allRoles.end() &&
 			Game::authenticateRole(uuid, roleAction)
 			&&
