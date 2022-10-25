@@ -203,14 +203,22 @@ namespace game {
 			&&
 			playerMapping.at(uuid).isAlive() &&
 			Game::canVote(roleAction, target) || (target == 0 || target == -2 || playerMapping.find(target) != playerMapping.end())) {
-			if (gunFound && target != 0) {
+			if (gunFound && roleAction == GUNNED_MEETING && target != 0) {
 				if (target != -2) {
 					if (Game::killUserAlt(target)) {
 						Game::emitMafiaMessage(target);
 						playerMapping.at(uuid).eraseItem(GUN);
 					}
 				}
+				std::set<uint64_t> sendPlayers;
+				sendPlayers.insert(uuid);
 				playerMapping.at(uuid).setUsedGun(true);
+				std::string writeMessage = "{\"cmd\": 2, \"roleAction\":" + std::to_string(roleAction) + ",\"playerid\":" + std::to_string(uuid) + ",\"target\":" + std::to_string(target) + '}';
+				std::array<char, MAX_IP_PACK_SIZE> writeString;
+				memset(writeString.data(), '\0', writeString.size());
+				std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+				chatroom_.emitMessage(std::make_pair(writeString, sendPlayers));
+				return;
 			}
 			if (target == 0) {
 				Game::unvote(roleAction, uuid);
@@ -1074,6 +1082,9 @@ namespace game {
 
 	bool Game::authenticateRole(uint64_t uuid, uint64_t roleAction) {
 		if (roleAction == 0x0 || (playerMapping.at(uuid).getRoleConfig() & roleAction)) {
+			return true;
+		}
+		if (roleAction == GUNNED_MEETING && !playerMapping.at(uuid).hasUsedGun()) {
 			return true;
 		}
 		
