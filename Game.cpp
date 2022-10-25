@@ -496,14 +496,16 @@ namespace game {
 	bool Game::checkVotes() {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		bool voteCheck = true;
-		for (auto i = alivePlayers.begin(); i != alivePlayers.end(); i++) {
+		if (this->cycle) {
+			for (auto i = alivePlayers.begin(); i != alivePlayers.end(); i++) {
 				if (playerMapping.at(*i).hasUsedGun()) {
 					voteCheck = false;
 					break;
+				}
 			}
-		}
-		if (!voteCheck) {
-			return false;
+			if (!voteCheck) {
+				return false;
+			}
 		}
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			auto playerVotes = meetingVotes.at(*i);
@@ -709,6 +711,7 @@ namespace game {
 	{
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		playerMapping.at(targetUuid).addItem(GUN + MULTI_USE);
+		playerMapping.at(targetUuid).setUsedGun(false);
 	}
 	void Game::gunsmithMeeting()
 	{
@@ -1128,7 +1131,6 @@ namespace game {
 	}
 	
 	void Role::clearItems() {
-
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		std::list<uint64_t> cpy(items.begin(), items.end());
 		for (auto i = cpy.begin(); i != cpy.end(); i++) {
@@ -1164,6 +1166,7 @@ namespace game {
 			this->items.push_back(GUN + MULTI_USE);
 		}
 		this->alive = true;
+		this->usedGun = true;
 		this->mutex_ = mutex; 
 	}
 }
