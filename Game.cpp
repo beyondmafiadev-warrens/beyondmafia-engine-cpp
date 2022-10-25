@@ -109,7 +109,7 @@ namespace game {
 				throw new std::invalid_argument("JSON Array contains invalid roles");
 			}
 			else {
-				Role role = Role::Role(val.as_int64());
+				Role role = Role::Role(val.as_int64(),this->mutex_);
 				Game::parseRoleConfig(role.getRoleConfig());
 				availableRoles.push_back(role);
 			}
@@ -1017,12 +1017,15 @@ namespace game {
 	}
 	
 	void Role::addInteraction(uint64_t interaction) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->interactions.push_back(interaction);
 	}
 	void Role::clearInteractions() {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->interactions.clear();
 	}
 	void Role::addItem(uint64_t item) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->items.push_back(item);
 	}
 	uint64_t Role::getRoleConfig() {
@@ -1036,6 +1039,8 @@ namespace game {
 	}
 	
 	void Role::clearItems() {
+
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		for (auto i = items.begin(); i != items.end(); i++) {
 			if (!(*i & MULTI_USE)) {
 				items.erase(i);
@@ -1043,17 +1048,19 @@ namespace game {
 		}
 	}
 	void Role::eraseInteraction(uint64_t interaction) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->interactions.remove(interaction);
 	}
 
 	void Role::eraseItem(uint64_t itemConfig) {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		std::list<uint64_t>::iterator itemiterator = std::remove_if(items.begin(), items.end(), [itemConfig](const uint64_t& item) {
 			return item & itemConfig;
 			});
 		this->items.erase(itemiterator,items.end());
 	}
 
-	Role::Role(uint64_t roleConfig) :
+	Role::Role(uint64_t roleConfig, std::recursive_mutex * mutex) :
 		roleConfig_(roleConfig){
 		if (roleConfig & BULLETPROOF) {
 			this->items.push_back(VEST + MULTI_USE);
@@ -1062,5 +1069,6 @@ namespace game {
 			this->items.push_back(MILLER_VEST + MULTI_USE);
 		}
 		this->alive = true;
+		this->mutex_ = mutex; 
 	}
 }
