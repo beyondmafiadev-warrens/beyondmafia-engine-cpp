@@ -8,10 +8,9 @@
 #include "Chatroom.h"
 #include "Database.h"
 namespace game{
-
 	class Role {
 	public:
-		Role(uint64_t roleConfig);
+		Role(uint64_t roleConfig,std::recursive_mutex * mutex);
 		uint64_t getRoleConfig();
 		std::list<uint64_t> getInteractions();
 		std::list<uint64_t>  getItems();
@@ -24,16 +23,20 @@ namespace game{
 		void clearItems();
 		void setAlive(bool alive);
 		void eraseItem(uint64_t itemConfig);
+		bool hasUsedGun();
+		void setUsedGun(bool val);
 		void eraseInteraction(uint64_t interactionConfig);
 	private:
+		std::recursive_mutex* mutex_;
 		bool alive;
+		bool usedGun;
 		std::string roleString;
 		std::list<uint64_t > items;
 		std::list<uint64_t > interactions;
 		uint64_t roleConfig_;
 	};
 
-	class Game {
+	class Game{
 	public:
 		Game(chat::chatRoom& chatroom, std::shared_ptr<db::database> database, int port, boost::asio::steady_timer& gameTimer);
 		int addPlayer(uint64_t uuid);
@@ -97,6 +100,8 @@ namespace game{
 		//Stalker Meeting
 		void stalkerMeeting();
 		void handleStalkerMeeting(uint64_t targetUuid);
+		void handleGunsmithMeeting(uint64_t targetUuid);
+		void gunsmithMeeting();
 		void emitStalkerMessage(uint64_t targetUuid);
 		void parseGlobalMeetings();
 		void parseRoleConfig(uint64_t roleConfig);

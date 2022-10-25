@@ -26,6 +26,8 @@ namespace game {
 			return true;
 		case(FRAMER):
 			return true;
+		case(GUNSMITH):
+			return true;
 		}
 		return false;
 	}
@@ -138,6 +140,14 @@ namespace game {
 			return false;
 		}
 		switch (roleAction) {
+		case(GUNNED_MEETING):
+			if (alivePlayers.find(target) != alivePlayers.end()) {
+				return true;
+			}
+		case(GUNSMITH):
+			if (alivePlayers.find(target) != alivePlayers.end() && std::find(meetingList[GUNSMITH].begin(), meetingList[GUNSMITH].end(), target) == meetingList[GUNSMITH].end()) {
+				return true;
+			}
 		case(MAFIA):
 			if (alivePlayers.find(target) != alivePlayers.end()
 				&& std::find(meetingList[MAFIA].begin(), meetingList[MAFIA].end(), target) == meetingList[MAFIA].end()) {
@@ -185,11 +195,23 @@ namespace game {
 
 	void Game::vote(uint64_t roleAction, uint64_t uuid, uint64_t target) {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
-		if (std::find(allRoles.begin(), allRoles.end(), roleAction) != allRoles.end() &&
+		std::list<uint64_t> items = playerMapping.at(uuid).getItems();
+		bool gunFound = std::find(items.begin(), items.end(), GUN) != items.end();
+		if (std::find(allRoles.begin(), allRoles.end(), roleAction) != allRoles.end() || gunFound
+			&&
 			Game::authenticateRole(uuid, roleAction)
 			&&
 			playerMapping.at(uuid).isAlive() &&
 			Game::canVote(roleAction, target) || (target == 0 || target == -2 || playerMapping.find(target) != playerMapping.end())) {
+			if (gunFound && target != 0) {
+				if (target != -2) {
+					if (Game::killUserAlt(target)) {
+						Game::emitMafiaMessage(target);
+						playerMapping.at(uuid).eraseItem(GUN);
+					}
+				}
+				playerMapping.at(uuid).setUsedGun(true);
+			}
 			if (target == 0) {
 				Game::unvote(roleAction, uuid);
 				return;
@@ -466,6 +488,15 @@ namespace game {
 	bool Game::checkVotes() {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		bool voteCheck = true;
+		for (auto i = alivePlayers.begin(); i != alivePlayers.end(); i++) {
+				if (playerMapping.at(*i).hasUsedGun()) {
+					voteCheck = false;
+					break;
+			}
+		}
+		if (!voteCheck) {
+			return false;
+		}
 		for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
 			auto playerVotes = meetingVotes.at(*i);
 			for (auto j = playerVotes.begin(); j != playerVotes.end(); j++) {
@@ -537,10 +568,11 @@ namespace game {
 						break;
 					case(STALKER):
 						handleStalkerMeeting(i->first);
+					case(GUNSMITH):
+						handleGunsmithMeeting(i->first);
 					}
 				}
 			}
-
 			i->second.clearInteractions();
 			i->second.clearItems();
 		}
@@ -551,6 +583,10 @@ namespace game {
 		if (this->started) {
 			std::set<uint64_t> recipients;
 			recipients.insert(playerid);
+			std::list<uint64_t> items = playerMapping.at(playerid).getItems();
+			bool gunFound = std::find_if(items.begin(), items.end(), [](const uint64_t& itemConfig) {
+				return itemConfig & GUN;
+				}) != items.end();
 			if (playerMapping.at(playerid).isAlive()
 				&& this->cycle) {
 				std::string writeMessage = "{\"cmd\": 5,\"players\":[";
@@ -587,7 +623,7 @@ namespace game {
 					return;
 				}
 			}
-			if (playerMapping.at(playerid).isAlive() && (!this->cycle && playerMapping.at(playerid).hasNightAction()) || (this->cycle && playerMapping.at(playerid).hasDayAction())) {
+			if (playerMapping.at(playerid).isAlive() && (!this->cycle && playerMapping.at(playerid).hasNightAction()) || (this->cycle && (playerMapping.at(playerid).hasDayAction()))) {
 				std::string writeMessage = "{\"cmd\": 5,\"players\":[";
 				std::set<uint64_t> players = meetingList.at(playerMapping.at(playerid).getRoleConfig());
 				for (auto j = players.begin(); j != players.end(); j++) {
@@ -600,6 +636,15 @@ namespace game {
 				std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
 				chatroom_.emitMessage(std::make_pair(writeString, recipients));
 			}
+			if (this->cycle && gunFound) {
+				std::string writeMessage = "{\"cmd\": 5,\"players\":[";
+				writeMessage += std::to_string(playerid);
+				writeMessage += "], \"role\":" + std::to_string(GUNNED_MEETING) + '}';
+				std::array<char, MAX_IP_PACK_SIZE> writeString;
+				memset(writeString.data(), '\0', writeString.size());
+				std::copy(writeMessage.begin(), writeMessage.end(), writeString.data());
+				chatroom_.emitMessage(std::make_pair(writeString, recipients));
+		}
 		}
 		if (!playerMapping.at(playerid).isAlive()) {
 			for (auto i = roleQueue.begin(); i != roleQueue.end(); i++) {
@@ -622,7 +667,7 @@ namespace game {
 
 	void Game::handleMafiaMeeting(uint64_t playerID) {
 		if (Game::killUserAlt(playerID)) {
-			Game::emitVillageMessage(playerID);
+			Game::emitMafiaMessage(playerID);
 		}
 	}
 
@@ -652,9 +697,17 @@ namespace game {
 	void Game::handleStalkerMeeting(uint64_t targetUuid) {
 		Game::emitStalkerMessage(targetUuid);
 	}
+	void Game::handleGunsmithMeeting(uint64_t targetUuid)
+	{
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
+		playerMapping.at(targetUuid).addItem(GUN + MULTI_USE);
+	}
+	void Game::gunsmithMeeting()
+	{
+		handleMeeting(GUNSMITH);
+	}
 	void Game::handleDoctorMeeting(uint64_t targetUuid) {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
-		auto target = alivePlayers.find(targetUuid);
 		playerMapping.at(targetUuid).addItem(SAVE);
 	}
 	void Game::lawyerMeeting()
@@ -695,7 +748,15 @@ namespace game {
 		chatroom_.emitMessage(std::make_pair(writeString, recipients));
 	}
 	void Game::emitVillageMessage(uint64_t playerID) {
-		std::string writeMessage = "{\"cmd\": 3,\"role\":" + std::to_string(playerMapping.at(playerID).getRoleConfig()) + ",\"action\":1, \"playerid\": " + std::to_string(playerID) + '}';
+		std::string role;
+		uint64_t roleConfig = playerMapping.at(playerID).getRoleConfig();
+		if (roleConfig & MILLER) {
+			role = std::to_string(MAFIA);
+		}
+		else {
+			role = std::to_string(roleConfig);
+		}
+		std::string writeMessage = "{\"cmd\": 3,\"role\":" + role + ",\"action\":1, \"playerid\": " + std::to_string(playerID) + '}';
 		std::set<uint64_t> recipients;
 		std::array<char, MAX_IP_PACK_SIZE> writeString;
 		memset(writeString.data(), '\0', writeString.size());
@@ -849,6 +910,9 @@ namespace game {
 				break;
 			case(FRAMER):
 				framerMeeting();
+				break;
+			case(GUNSMITH):
+				gunsmithMeeting();
 				break;
 			}
 		}
@@ -1028,6 +1092,20 @@ namespace game {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		this->items.push_back(item);
 	}
+	bool Role::hasUsedGun() {
+		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
+		bool gunFound = std::find_if(items.begin(), items.end(), [](const uint64_t& itemConfig) {
+			return itemConfig & GUN;
+			}) != items.end();
+			if (!gunFound) {
+				return true;
+			}
+			return this->usedGun;
+	}
+	void Role::setUsedGun(bool val) {
+		this->usedGun = val;
+	}
+
 	uint64_t Role::getRoleConfig() {
 		return this->roleConfig_;
 	}
@@ -1041,9 +1119,13 @@ namespace game {
 	void Role::clearItems() {
 
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
-		for (auto i = items.begin(); i != items.end(); i++) {
+		std::list<uint64_t> cpy(items.begin(), items.end());
+		for (auto i = cpy.begin(); i != cpy.end(); i++) {
+			if (*i == GUN + MULTI_USE) {
+				Role::setUsedGun(false);
+			}
 			if (!(*i & MULTI_USE)) {
-				items.erase(i);
+				Role::eraseItem(*i);
 			}
 		}
 	}
@@ -1057,7 +1139,6 @@ namespace game {
 		std::list<uint64_t>::iterator itemiterator = std::remove_if(items.begin(), items.end(), [itemConfig](const uint64_t& item) {
 			return item & itemConfig;
 			});
-		this->items.erase(itemiterator,items.end());
 	}
 
 	Role::Role(uint64_t roleConfig, std::recursive_mutex * mutex) :
@@ -1067,6 +1148,9 @@ namespace game {
 		}
 		if (roleConfig & MILLER || roleConfig & GODFATHER) {
 			this->items.push_back(MILLER_VEST + MULTI_USE);
+		}
+		if (roleConfig & SHERIFF || roleConfig & SNIPER) {
+			this->items.push_back(GUN + MULTI_USE);
 		}
 		this->alive = true;
 		this->mutex_ = mutex; 

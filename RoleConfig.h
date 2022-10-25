@@ -19,6 +19,10 @@ enum ROLES {
 	MILLER = 0x40,
 	GODFATHER = 0x41,
 	FRAMER = 0x81, 
+	GUNSMITH = 0x100,
+	SHERIFF = 0x200,
+	SNIPER = 0X201,
+	GUNNED_MEETING = 0x400,
 	//
 };
 
@@ -40,5 +44,5 @@ enum ITEM{
 	VEST = 0x8,
 	//1 0000
 	ROLEBLOCK = 0x10,
-
+	GUN = 0x20
 };
