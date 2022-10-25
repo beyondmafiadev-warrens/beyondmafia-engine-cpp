@@ -10,7 +10,7 @@ namespace db {
 		void insertGamePort(uint64_t port) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			stmt->execute("LOCK TABLE mafiadata.gametablequeue WRITE");
 			prep_stmt = (*globalConnnection)->prepareStatement(
@@ -24,7 +24,7 @@ namespace db {
 		void deleteGamePort(uint64_t port) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			stmt->execute("LOCK TABLE gametablequeue WRITE");
 			prep_stmt = (*globalConnnection)->prepareStatement(
@@ -40,7 +40,7 @@ namespace db {
 		void updateSetupStats(uint64_t id, int winState) {
 			if (winState == 0) {
 				sql::PreparedStatement* prep_stmt;			
-				std::lock_guard<std::mutex> guard(*mutex_);
+				std::lock_guard<std::recursive_mutex> guard(*mutex_);
 				prep_stmt = (*globalConnnection)->prepareStatement(
 					"UPDATE mafiadata.setups SET townWins=townWins+1 WHERE setupId = ?");
 				prep_stmt->setInt(1, id);
@@ -49,7 +49,7 @@ namespace db {
 			}
 			else if (winState == 1){
 				sql::PreparedStatement* prep_stmt;			
-				std::lock_guard<std::mutex> guard(*mutex_);
+				std::lock_guard<std::recursive_mutex> guard(*mutex_);
 				prep_stmt = (*globalConnnection)->prepareStatement(
 					"UPDATE mafiadata.setups SET mafiaWins=mafiaWins+1 WHERE setupId = ?");
 					prep_stmt->setInt(1, id);
@@ -60,7 +60,7 @@ namespace db {
 		}
 		void updateEndGameState() {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"UPDATE `mafiadata`.`games` SET gameEnded=true WHERE gameId = ?");
 			prep_stmt->setUInt64(1, gameID);
@@ -69,7 +69,7 @@ namespace db {
 		}
 		void updateStartedGameState() {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"UPDATE `mafiadata`.`games` SET startedGame=true WHERE gameId = ?");
 			prep_stmt->setUInt64(1, gameID);
@@ -79,7 +79,7 @@ namespace db {
 
 		void updateGameState() {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"UPDATE `mafiadata`.`games` SET state=state+1 WHERE gameId = ?");
 			prep_stmt->setUInt64(1, gameID);
@@ -89,7 +89,7 @@ namespace db {
 
 		double getSetupStats(uint64_t id) {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			sql::ResultSet* res;
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"SELECT mafiaWins,townWins FROM mafiadata.setups WHERE setupId = ? LIMIT 1;");
@@ -109,7 +109,7 @@ namespace db {
 		}
 		void insertGameStats(uint64_t playerid,int score,bool win) {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			if (win) {
 				prep_stmt = (*globalConnnection)->prepareStatement(
 					"UPDATE `mafiadata`.`usertable` SET wins=wins+1,points=points+? WHERE playerid = ?;");
@@ -126,7 +126,7 @@ namespace db {
 		}
 		std::string getRoles(uint64_t id) {
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			sql::ResultSet* res;
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"SELECT setup FROM mafiadata.setups WHERE setupId = ? LIMIT 1;");
@@ -142,7 +142,7 @@ namespace db {
 			sql::Statement* stmt;
 			sql::ResultSet* res;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"INSERT INTO mafiadata.games(port,maxPlayers,state,rankedGame,lockedGame,startedGame,gameEnded) VALUES(?,?,0,?,?,false,false)");
@@ -163,7 +163,7 @@ namespace db {
 		void insertPlayer(uint64_t port, uint64_t playerid) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"INSERT INTO mafiadata.gameplayers(gameId,uuid) VALUES( (SELECT gameId FROM mafiadata.games WHERE port = ? LIMIT 1) ,?);");
@@ -176,7 +176,7 @@ namespace db {
 		void insertRole(uint64_t port, uint64_t roleConfig) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"INSERT INTO mafiadata.gameRoles(gameId,roleConfig) VALUES( (SELECT gameId FROM mafiadata.games WHERE port = ? LIMIT 1) ,?);");
@@ -189,7 +189,7 @@ namespace db {
 		void insertWebsocket(uint64_t port, int websocketPort, uint64_t playerid) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;					
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"INSERT INTO mafiadata.playersocket(gameId,websocketPort,uuid) VALUES( (SELECT gameId FROM mafiadata.games WHERE port = ? LIMIT 1) ,?,?);");
@@ -203,7 +203,7 @@ namespace db {
 		void deleteWebsocket(uint64_t playerid) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"DELETE FROM mafiadata.playersocket WHERE uuid = ?;");
@@ -215,7 +215,7 @@ namespace db {
 		void deleteGamePlayers(uint64_t playerid) {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"DELETE FROM mafiadata.gameplayers WHERE uuid = ?;");
@@ -228,7 +228,7 @@ namespace db {
 			sql::Statement* stmt;
 			sql::ResultSet* res;
 			sql::PreparedStatement* prep_stmt;		
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"SELECT playerid FROM mafiadata.usertable WHERE cookie = ? LIMIT 1;");
@@ -251,7 +251,7 @@ namespace db {
 		void deleteGame() {
 			sql::Statement* stmt;
 			sql::PreparedStatement* prep_stmt;			
-			std::lock_guard<std::mutex> guard(*mutex_);
+			std::lock_guard<std::recursive_mutex> guard(*mutex_);
 			stmt = (*globalConnnection)->createStatement();
 			prep_stmt = (*globalConnnection)->prepareStatement(
 				"DELETE FROM mafiadata.games WHERE gameId = ?;");
@@ -263,7 +263,7 @@ namespace db {
 	private:
 		std::shared_ptr<sql::Connection*> globalConnnection;
 		uint64_t gameID;
-		std::mutex * mutex_;
+		std::recursive_mutex* mutex_;
 		void  makeConnnection(std::string DATABASE_IP, int DATABASE_PORT, std::string DATABASE_USER, std::string DATABASE_PASSWORD) {
 			sql::mysql::MySQL_Driver* driver;
 			sql::Connection* con;
@@ -279,7 +279,7 @@ namespace db {
 			driver = sql::mysql::get_mysql_driver_instance();
 			con = driver->connect(connection_properties);
 			globalConnnection = std::make_shared<sql::Connection*>(con);
-			this->mutex_ = new std::mutex();
+			this->mutex_ = new std::recursive_mutex();
 		}
 	};
 }

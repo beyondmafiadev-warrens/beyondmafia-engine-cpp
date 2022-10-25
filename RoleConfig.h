@@ -8,12 +8,18 @@ enum ROLES {
 	DOCTOR = 0x2,
 	//0100
 	COP = 0x4,
+	STALKER = 0x5,
 	//1000 
 	BULLETPROOF = 0x8,
 	// 0001 0000
 	ROLEBLOCKER = 0x10,
+	HOOKER = 0x11,
 	//0010 0000
-	LAWYER = 0x20
+	LAWYER = 0x20,
+	MILLER = 0x40,
+	GODFATHER = 0x41,
+	FRAMER = 0x81, 
+	//
 };
 
 enum CYCLE {
@@ -29,12 +35,10 @@ enum ITEM{
 	//0010
 	SAVE = 0x2,
 	//0100
-	MILLER = 0x4,
+	MILLER_VEST = 0x4,
 	//1000
 	VEST = 0x8,
 	//1 0000
 	ROLEBLOCK = 0x10,
-
-	LAW = 0x20, 
 
 };

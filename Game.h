@@ -52,12 +52,14 @@ namespace game{
 		void addKicks(uint64_t playerid);
 		void kickAllPlayers();
 	private:
-	  std::mutex * mutex_;
+	  std::recursive_mutex * mutex_;
 		void initalizeGame();
 		void startTimer();
 		void queueKicks();
 		void kickPlayers();
 		void start();
+		bool freezeVotes = false;
+		bool kicksRequested = false;
 		bool killUserAlt(uint64_t playerID);
 		bool killUserVillage(uint64_t playerID);
 		bool meetingCheck(uint64_t roleConfig, int amountVotes);
@@ -81,6 +83,12 @@ namespace game{
 		//Doctor
 		void doctorMeeting();
 		void handleDoctorMeeting(uint64_t targetUuid);
+		//Lawyer Meeting 
+		void lawyerMeeting();
+		void handleLawyerMeeting(uint64_t targetUuid);
+		//Framer meeting 
+		void framerMeeting();
+		void handleFramerMeeting(uint64_t targetUuid);
 		//Bulletproof
 		void emitBulletproofMessage(uint64_t targetUuid);
 		//Roleblocker 
@@ -92,12 +100,6 @@ namespace game{
 		void emitStalkerMessage(uint64_t targetUuid);
 		void parseGlobalMeetings();
 		void parseRoleConfig(uint64_t roleConfig);
-		void useTrackerMeeting(uint64_t uuid, std::list<uint64_t>targets);
-		void useWatcherMeeting(uint64_t uuid, std::list<uint64_t>targets);
-		void useBlacksmithMeeting(uint64_t uuid, std::list<uint64_t>targets);
-		void useRoleblockerMeeting(uint64_t uuid, std::list<uint64_t>targets);
-		void useStalkerMeeting(uint64_t uuid, std::list<uint64_t>targets);
-		void useJanitorMeeting(uint64_t uuid, std::list<uint64_t>targets);
 		void endGame();
 		int gameOver();
 		std::array<char, MAX_IP_PACK_SIZE> getMessage(std::string writeMessage);
