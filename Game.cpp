@@ -196,7 +196,9 @@ namespace game {
 	void Game::vote(uint64_t roleAction, uint64_t uuid, uint64_t target) {
 		std::lock_guard<std::recursive_mutex> iterationMutex(*mutex_);
 		std::list<uint64_t> items = playerMapping.at(uuid).getItems();
-		bool gunFound = std::find(items.begin(), items.end(), GUN) != items.end();
+		bool gunFound = std::find_if(items.begin(), items.end(), [](const uint64_t& itemConfig) {
+			return itemConfig & GUN;
+			}) != items.end();
 		if (std::find(allRoles.begin(), allRoles.end(), roleAction) != allRoles.end() || gunFound
 			&&
 			Game::authenticateRole(uuid, roleAction)
@@ -1156,13 +1158,13 @@ namespace game {
 
 	Role::Role(uint64_t roleConfig, std::recursive_mutex * mutex) :
 		roleConfig_(roleConfig){
-		if (roleConfig & BULLETPROOF) {
+		if (roleConfig == BULLETPROOF) {
 			this->items.push_back(VEST + MULTI_USE);
 		}
-		if (roleConfig & MILLER || roleConfig & GODFATHER) {
+		if (roleConfig == MILLER || roleConfig == GODFATHER) {
 			this->items.push_back(MILLER_VEST + MULTI_USE);
 		}
-		if (roleConfig & SHERIFF || roleConfig & SNIPER) {
+		if (roleConfig == SHERIFF || roleConfig == SNIPER) {
 			this->items.push_back(GUN + MULTI_USE);
 		}
 		this->alive = true;
